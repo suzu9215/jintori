@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<!-- スマホの画面幅に自動調整 & ズームを防止 -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>オリジナル対戦ボードゲーム</title>
+<style>
+body {
+font-family: sans-serif;
+display: flex;
+flex-direction: column;
+align-items: center;
+background-color: #f0f2f5;
+margin: 0;
+padding: 10px;
+touch-action: manipulation; /* 連打時のズームを防止 */
+}
+h1 {
+font-size: 1.4rem;
+margin: 10px 0;
+color: #333;
+}
+#status {
+font-size: 1rem;
+font-weight: bold;
+margin-bottom: 10px;
+padding: 8px 16px;
+border-radius: 8px;
+background: #fff;
+box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+/* スマホ画面に合わせて幅いっぱいに収まるレスポンシブ対応 */
+.canvas-container {
+width: 100%;
+max-width: 800px;
+display: flex;
+justify-content: center;
+}
+canvas {
+background: #1e1e24;
+border-radius: 12px;
+box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+width: 100%;
+height: auto;
+touch-action: none; /* タッチ操作時のスクロールを防ぐ */
+}
+button {
+margin-top: 15px;
+padding: 12px 24px;
+font-size: 1rem;
+background-color: #4f46e5;
+color: white;
+border: none;
+border-radius: 6px;
+cursor: pointer;
+}
+button:hover { background-color: #4338ca; }
+</style>
+</head>
+<body>
+
+<h1>アブストラクト・ボードゲーム</h1>
+<div id="status">プレイヤー1（赤）の番です</div>
+<div class="canvas-container">
+<canvas id="gameCanvas" width="800" height="500"></canvas>
+</div>
+<button onclick="resetGame()">リセット</button>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const statusEl = document.getElementById('status');
+
+// 頂点（丸ポチ）の座標定義
+const nodes = [
+{ id: 0, x: 100, y: 100 },
+{ id: 1, x: 100, y: 250 },
+{ id: 2, x: 100, y: 400 },
+
+{ id: 3, x: 200, y: 100 },
+{ id: 4, x: 200, y: 250 },
+{ id: 5, x: 200, y: 400 },
+
+{ id: 6, x: 330, y: 250 },
+{ id: 7, x: 330, y: 150 },
+
+{ id: 8, x: 430, y: 250 },
+{ id: 9, x: 430, y: 350 },
+
+{ id: 10, x: 560, y: 250 },
+{ id: 11, x: 560, y: 100 },
+{ id: 12, x: 560, y: 400 },
+
+{ id: 13, x: 660, y: 100 },
+{ id: 14, x: 660, y: 250 },
+{ id: 15, x: 660, y: 400 }
+];
+
+// 線（つながり）の定義
+const edges = [
+[0,3], [1,4], [2,5],
+[3,4], [4,5],
+[4,6],
+[6,7], [6,8],
+[8,9], [8,10],
+[10,11], [10,12],
+[10,14], [11,13], [12,15]
+];
+
+let pieces = {};
+let currentPlayer = 'P1';
+let selectedNode = null;
+let gameOver = false;
+
+function initGame() {
+pieces = {
+0: 'P1', 1: 'P1', 2: 'P1',
+13: 'P2', 14: 'P2', 15: 'P2'
+};
+currentPlayer = 'P1';
+selectedNode = null;
+gameOver = false;
+updateStatus();
+draw();
+}
+
+function updateStatus() {
+if (gameOver) return;
+const name = currentPlayer === 'P1' ? 'プレイヤー1（赤）' : 'プレイヤー2（青）';
+statusEl.textContent = `${name} の番です`;
+statusEl.style.color = currentPlayer === 'P1' ? '#ef4444' : '#3b82f6';
+}
+
+function getValidMoves(fromNodeId) {
+const valid = [];
+edges.forEach(([u, v]) => {
+let neighbor = -1;
+if (u === fromNodeId) neighbor = v;
+if (v === fromNodeId) neighbor = u;
+if (neighbor !== -1 && !pieces[neighbor]) {
+valid.push(neighbor);
+}
+});
+return valid;
+}
+
+function draw() {
+ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+ctx.strokeStyle = '#4b5563';
+ctx.lineWidth = 4;
+ctx.lineCap = 'round';
+edges.forEach(([u, v]) => {
+ctx.beginPath();
+ctx.moveTo(nodes[u].x, nodes[u].y);
+ctx.lineTo(nodes[v].x, nodes[v].y);
+ctx.stroke();
+});
+
+if (selectedNode !== null) {
+const validMoves = getValidMoves(selectedNode);
+validMoves.forEach(targetId => {
+ctx.beginPath();
+ctx.arc(nodes[targetId].x, nodes[targetId].y, 22, 0, Math.PI * 2);
+ctx.fillStyle = 'rgba(74, 222, 128, 0.4)';
+ctx.fill();
+});
+}
+
+nodes.forEach(node => {
+ctx.beginPath();
+ctx.arc(node.x, node.y, 10, 0, Math.PI * 2);
+ctx.fillStyle = (node.id <= 2 || node.id >= 13) ? '#f59e0b' : '#9ca3af';
+ctx.fill();
+
+if (selectedNode === node.id) {
+ctx.beginPath();
+ctx.arc(node.x, node.y, 18, 0, Math.PI * 2);
+ctx.strokeStyle = '#facc15';
+ctx.lineWidth = 3;
+ctx.stroke();
+}
+
+const owner = pieces[node.id];
+if (owner) {
+ctx.beginPath();
+ctx.arc(node.x, node.y, 14, 0, Math.PI * 2);
+ctx.fillStyle = owner === 'P1' ? '#ef4444' : '#3b82f6';
+ctx.fill();
+ctx.strokeStyle = '#fff';
+ctx.lineWidth = 2;
+ctx.stroke();
+}
+});
+}
+
+// クリック＆タッチ両対応の判定処理
+function handlePointer(clientX, clientY) {
+if (gameOver) return;
+
+const rect = canvas.getBoundingClientRect();
+const scaleX = canvas.width / rect.width;
+const scaleY = canvas.height / rect.height;
+
+// 画面の拡大率を考慮した座標計算
+const canvasX = (clientX - rect.left) * scaleX;
+const canvasY = (clientY - rect.top) * scaleY;
+
+const clickedNode = nodes.find(n => {
+const dist = Math.hypot(n.x - canvasX, n.y - canvasY);
+return dist < 30; // タッチしやすく判定判定範囲を少し広めに設定
+});
+
+if (!clickedNode) return;
+const id = clickedNode.id;
+
+if (pieces[id] === currentPlayer) {
+selectedNode = id;
+}
+else if (selectedNode !== null) {
+const validMoves = getValidMoves(selectedNode);
+if (validMoves.includes(id)) {
+pieces[id] = currentPlayer;
+delete pieces[selectedNode];
+selectedNode = null;
+if (checkWin(currentPlayer)) {
+gameOver = true;
+statusEl.textContent = `🎉 ${currentPlayer === 'P1' ? 'プレイヤー1（赤）' : 'プレイヤー2（青）'} の勝利です！`;
+draw();
+return;
+}
+currentPlayer = currentPlayer === 'P1' ? 'P2' : 'P1';
+updateStatus();
+}
+}
+draw();
+}
+
+// マウスクリックイベント
+canvas.addEventListener('click', (e) => {
+handlePointer(e.clientX, e.clientY);
+});
+
+// スマホタッチイベント
+canvas.addEventListener('touchstart', (e) => {
+e.preventDefault(); // スクロール等の標準動作を無効化
+const touch = e.touches[0];
+handlePointer(touch.clientX, touch.clientY);
+}, { passive: false });
+
+function checkWin(player) {
+if (player === 'P1') {
+return pieces[13] === 'P1' && pieces[14] === 'P1' && pieces[15] === 'P1';
+} else {
+return pieces[0] === 'P2' && pieces[1] === 'P2' && pieces[2] === 'P2';
+}
+}
+
+function resetGame() {
+initGame();
+}
+
+initGame();
+</script>
+</body>
+</html>
+
